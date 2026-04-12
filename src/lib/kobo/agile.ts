@@ -1,0 +1,267 @@
+/**
+ * AGILE Niger State – Student Transition Tracking
+ *
+ * Form purpose: Track students transitioning from primary to secondary school
+ * across 22 LGAs in Niger State. One KoboToolbox project per LGA.
+ *
+ * Key fields (may be group-prefixed, e.g. pg_details/new_class):
+ *   enumerator        – EMIS officer (label: "Name | LGA | Phone")
+ *   old_school        – previous primary school code
+ *   student_id        – selected student code
+ *   c_name            – calculated: student full name
+ *   c_lga             – calculated: student LGA
+ *   c_school          – calculated: previous school name
+ *   c_adm             – calculated: admission number
+ *   c_class           – calculated: previous class (e.g. "Primary 6")
+ *   c_caregiver       – calculated: caregiver name
+ *   c_phone           – calculated: caregiver phone
+ *   new_class         – jss1 | ss1
+ *   new_school_lga    – LGA of new school
+ *   new_school_id     – new school code
+ *   new_school_other  – free-text if school not in list
+ *   student_nin       – optional 11-digit NIN
+ *   gps / pg_cert/gps – GPS coordinates
+ */
+
+import { KoboSubmission, KoboSurveyField } from "./types";
+
+// ── Field name resolution (handles group prefixes) ─────────────────────────
+
+const AGILE_FIELDS = [
+  "enumerator",
+  "old_school",
+  "student_id",
+  "c_name",
+  "c_lga",
+  "c_school",
+  "c_adm",
+  "c_class",
+  "c_caregiver",
+  "c_phone",
+  "new_class",
+  "new_school_lga",
+  "new_school_id",
+  "new_school_other",
+  "student_nin",
+  "gps",
+] as const;
+
+export type AgileFieldName = (typeof AGILE_FIELDS)[number];
+
+/** Get a field value from a submission, trying both bare and group-prefixed keys */
+export function getField(sub: KoboSubmission, field: AgileFieldName): string {
+  // Direct
+  if (sub[field] != null && sub[field] !== "") return String(sub[field]);
+  // Try any group-prefixed variant (e.g. pg_details/c_name)
+  for (const key of Object.keys(sub)) {
+    if (key.endsWith("/" + field) && sub[key] != null && sub[key] !== "") {
+      return String(sub[key]);
+    }
+  }
+  return "";
+}
+
+// ── AGILE form detection ────────────────────────────────────────────────────
+
+/** Returns true if a form's survey fields look like an AGILE student-tracking form */
+export function isAgileForm(survey: KoboSurveyField[]): boolean {
+  const names = new Set(survey.map((f) => f.name));
+  return (
+    names.has("student_id") &&
+    names.has("new_class") &&
+    names.has("c_name")
+  );
+}
+
+// ── Derived data types ──────────────────────────────────────────────────────
+
+export interface StudentRecord {
+  submissionId: number;
+  submissionTime: string;
+  enumeratorCode: string;
+  enumeratorLabel: string;
+  enumeratorLga: string;
+  studentId: string;
+  studentName: string;
+  studentLga: string;
+  previousSchool: string;
+  previousClass: string;
+  admissionNo: string;
+  caregiverName: string;
+  caregiverPhone: string;
+  newClass: string;
+  newSchoolLga: string;
+  newSchool: string;
+  newSchoolOther: string;
+  nin: string;
+  hasNin: boolean;
+}
+
+export interface EnumeratorStat {
+  code: string;
+  label: string;
+  lga: string;
+  count: number;
+}
+
+export interface SchoolCount {
+  name: string;
+  count: number;
+}
+
+export interface ClassTransition {
+  previousClass: string;
+  newClass: string;
+  count: number;
+}
+
+// ── Parsers ─────────────────────────────────────────────────────────────────
+
+/** Parse enumerator label "Name | LGA | Phone" → { name, lga } */
+function parseEnumeratorLabel(label: string): { name: string; lga: string } {
+  const parts = label.split("|").map((p) => p.trim());
+  return { name: parts[0] ?? label, lga: parts[1] ?? "" };
+}
+
+/** Build a full list of StudentRecord from raw KoboToolbox submissions */
+export function parseStudentRecords(
+  submissions: KoboSubmission[],
+  enumeratorChoiceMap: Map<string, string> // code → label
+): StudentRecord[] {
+  return submissions.map((sub) => {
+    const enumCode = getField(sub, "enumerator");
+    const enumLabel = enumeratorChoiceMap.get(enumCode) ?? enumCode;
+    const { name: enumName, lga: enumLga } = parseEnumeratorLabel(enumLabel);
+
+    const newSchoolRaw = getField(sub, "new_school_id");
+    const newSchoolOther = getField(sub, "new_school_other");
+    const nin = getField(sub, "student_nin");
+
+    return {
+      submissionId: sub._id,
+      submissionTime: sub._submission_time ?? "",
+      enumeratorCode: enumCode,
+      enumeratorLabel: enumName,
+      enumeratorLga: enumLga,
+      studentId: getField(sub, "student_id"),
+      studentName: getField(sub, "c_name"),
+      studentLga: getField(sub, "c_lga"),
+      previousSchool: getField(sub, "c_school"),
+      previousClass: getField(sub, "c_class"),
+      admissionNo: getField(sub, "c_adm"),
+      caregiverName: getField(sub, "c_caregiver"),
+      caregiverPhone: getField(sub, "c_phone"),
+      newClass: getField(sub, "new_class"),
+      newSchoolLga: getField(sub, "new_school_lga"),
+      newSchool: newSchoolOther || newSchoolRaw,
+      newSchoolOther,
+      nin,
+      hasNin: nin.length === 11,
+    };
+  });
+}
+
+/** Submissions per enumerator */
+export function groupByEnumerator(records: StudentRecord[]): EnumeratorStat[] {
+  const map = new Map<string, EnumeratorStat>();
+  for (const r of records) {
+    const key = r.enumeratorCode || r.enumeratorLabel || "Unknown";
+    if (!map.has(key)) {
+      map.set(key, {
+        code: r.enumeratorCode,
+        label: r.enumeratorLabel || r.enumeratorCode || "Unknown",
+        lga: r.enumeratorLga,
+        count: 0,
+      });
+    }
+    map.get(key)!.count++;
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+}
+
+/** Top N source (previous) schools */
+export function topSourceSchools(
+  records: StudentRecord[],
+  n = 10
+): SchoolCount[] {
+  const freq: Record<string, number> = {};
+  for (const r of records) {
+    if (!r.previousSchool) continue;
+    freq[r.previousSchool] = (freq[r.previousSchool] ?? 0) + 1;
+  }
+  return Object.entries(freq)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, n);
+}
+
+/** Top N destination (new) schools */
+export function topDestinationSchools(
+  records: StudentRecord[],
+  n = 10
+): SchoolCount[] {
+  const freq: Record<string, number> = {};
+  for (const r of records) {
+    const school = r.newSchoolOther || r.newSchool;
+    if (!school) continue;
+    freq[school] = (freq[school] ?? 0) + 1;
+  }
+  return Object.entries(freq)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, n);
+}
+
+/** Class breakdown: new_class value counts */
+export function newClassBreakdown(
+  records: StudentRecord[]
+): { label: string; count: number }[] {
+  const CLASS_LABELS: Record<string, string> = {
+    jss1: "JSS 1",
+    ss1: "SS 1",
+  };
+  const freq: Record<string, number> = {};
+  for (const r of records) {
+    if (!r.newClass) continue;
+    freq[r.newClass] = (freq[r.newClass] ?? 0) + 1;
+  }
+  return Object.entries(freq)
+    .map(([code, count]) => ({ label: CLASS_LABELS[code] ?? code, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** Previous class breakdown */
+export function previousClassBreakdown(
+  records: StudentRecord[]
+): { label: string; count: number }[] {
+  const freq: Record<string, number> = {};
+  for (const r of records) {
+    if (!r.previousClass) continue;
+    freq[r.previousClass] = (freq[r.previousClass] ?? 0) + 1;
+  }
+  return Object.entries(freq)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** NIN capture stats */
+export function ninCaptureStats(records: StudentRecord[]) {
+  const total = records.length;
+  const withNin = records.filter((r) => r.hasNin).length;
+  const rate = total > 0 ? Math.round((withNin / total) * 100) : 0;
+  return { total, withNin, withoutNin: total - withNin, rate };
+}
+
+/** LGA breakdown of students */
+export function studentsByLga(
+  records: StudentRecord[]
+): { label: string; count: number }[] {
+  const freq: Record<string, number> = {};
+  for (const r of records) {
+    const lga = r.studentLga || r.enumeratorLga || "Unknown";
+    freq[lga] = (freq[lga] ?? 0) + 1;
+  }
+  return Object.entries(freq)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
+}
