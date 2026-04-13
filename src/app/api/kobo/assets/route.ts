@@ -17,7 +17,13 @@ export async function GET() {
   }
 
   const data: KoboAssetsResponse = await res.json();
-  return NextResponse.json(data.results, {
+
+  // Only surface projects that are actively deployed (exclude drafts and archived)
+  const deployed = data.results.filter(
+    (a) => a.deployment_status === "deployed"
+  );
+
+  return NextResponse.json(deployed, {
     headers: { "Cache-Control": "no-store" },
   });
 }

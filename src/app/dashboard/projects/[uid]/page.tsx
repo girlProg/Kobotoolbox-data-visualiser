@@ -97,7 +97,7 @@ export default function ProjectPage({
   return (
     <>
       <Topbar title={projectName} />
-      <main className="flex-1 p-6 space-y-8 bg-gray-50">
+      <main className="flex-1 p-4 md:p-6 space-y-6 md:space-y-8 bg-gray-50">
         {hasError && (
           <Alert variant="destructive">
             <AlertDescription>Failed to load project data.</AlertDescription>
@@ -118,7 +118,7 @@ export default function ProjectPage({
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Class transitions
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {isLoading ? (
                   <>
                     <Skeleton className="h-64 rounded-xl" />
@@ -137,7 +137,7 @@ export default function ProjectPage({
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 School transitions
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {isLoading ? (
                   <>
                     <Skeleton className="h-80 rounded-xl" />

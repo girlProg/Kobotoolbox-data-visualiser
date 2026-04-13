@@ -53,7 +53,7 @@ export function AgileStatCards({ records, loading }: Props) {
   const uniqueEnumerators = new Set(records.map((r) => r.enumeratorCode).filter(Boolean)).size;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
       <Stat
         icon={Users}
         title="Students tracked"
