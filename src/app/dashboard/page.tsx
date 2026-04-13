@@ -57,7 +57,7 @@ export default function DashboardPage() {
   return (
     <>
       <Topbar title="Niger State AGILE — Overview" />
-      <main className="flex-1 p-6 space-y-6 bg-gray-50">
+      <main className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6 bg-gray-50">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>
@@ -83,7 +83,7 @@ export default function DashboardPage() {
         )}
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard
             title="Total students tracked"
             value={totalSubmissions.toLocaleString()}

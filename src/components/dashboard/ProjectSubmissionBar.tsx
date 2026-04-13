@@ -29,7 +29,7 @@ export function ProjectSubmissionBar({ assets }: Props) {
         <CardTitle className="text-sm font-medium">Submissions per project</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis
