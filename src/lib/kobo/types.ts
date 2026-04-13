@@ -37,6 +37,7 @@ export interface KoboSubmission {
 
 export interface KoboDataResponse {
   count: number;
+  next: string | null;
   results: KoboSubmission[];
 }
 
