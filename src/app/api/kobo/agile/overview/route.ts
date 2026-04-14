@@ -144,31 +144,47 @@ export async function GET() {
   // enumerator counts, producing totals that disagree with the project page.
   const mainChoices = (mainForm.content?.choices ?? []) as KoboChoice[];
 
-  // Build the enumerator label map from the main form so that ALL records
-  // (including those from backup forms) get consistent "Name | LGA | Phone"
-  // resolution and correct LGA attribution.
-  const mainEnumeratorMap = new Map<string, string>(
-    mainChoices
-      .filter((c) => c.list_name === "enumerator")
-      .map((c) => [c.name, getLabel(c.label, c.name)])
-  );
-
   // ── 6. Parse & de-duplicate StudentRecords ────────────────────────────────
   //
-  // Process the main form first (it is agileForms[0] after the sort above).
-  // Backup form records are only added when their studentId hasn't been seen —
-  // i.e., students who couldn't submit on the main form due to size issues.
-  // All records use the main form's enumerator map so LGA attribution is
-  // consistent regardless of which form the submission came from.
+  // Each form is parsed with ITS OWN enumerator map so "Name | LGA | Phone"
+  // labels resolve correctly regardless of which choice codes the form uses.
+  // (Using the main form's map for backup forms breaks LGA attribution because
+  // backup forms have different enumerator codes not present in the main map.)
+  //
+  // For any records where enumeratorLga is still empty after parsing (e.g. the
+  // backup form's enumerator labels don't follow the "Name | LGA | Phone"
+  // convention), we fall back to the LGA inferred from the form name itself
+  // ("Niger Agile Agaie" → "Agaie").
+  //
+  // The main form is processed first (agileForms[0] after the sort above) so
+  // its records take priority during deduplication; backup-form records are
+  // only added for students whose studentId hasn't been seen yet.
   const seenStudentIds = new Set<string>();
   const mergedRecords: StudentRecord[] = [];
   const allSubmissions: KoboSubmission[] = [];
 
-  for (const { submissions } of formSubmissions) {
-    // Parse with the main form's enumerator map (consistent LGA resolution)
-    const records = parseStudentRecords(submissions, mainEnumeratorMap);
+  for (const { form, submissions } of formSubmissions) {
+    // Build this form's own enumerator map
+    const formChoices = (form.content?.choices ?? []) as KoboChoice[];
+    const enumMap = new Map<string, string>(
+      formChoices
+        .filter((c) => c.list_name === "enumerator")
+        .map((c) => [c.name, getLabel(c.label, c.name)])
+    );
+
+    // LGA inferred from the form name — used as last-resort fallback.
+    // "Niger Agile Agaie" → "Agaie", "Niger Agile" → "" (main form, no suffix).
+    const formLga = form.name.replace(/^niger\s+agile\s*/i, "").trim();
+
+    const records = parseStudentRecords(submissions, enumMap);
 
     for (const record of records) {
+      // If LGA attribution is missing, fill it from the form name so the record
+      // still contributes to the correct LGA in the progress table.
+      if (!record.enumeratorLga && !record.studentLga && formLga) {
+        record.enumeratorLga = formLga;
+      }
+
       const key = record.studentId || `sub_${record.submissionId}`;
       if (!seenStudentIds.has(key)) {
         seenStudentIds.add(key);
