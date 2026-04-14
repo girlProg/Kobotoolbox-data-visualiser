@@ -30,6 +30,7 @@ import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassCh
 import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
 import { NinCaptureBar } from "@/components/agile/NinCaptureBar";
 import { SchoolCoverageCard, EnumeratorCoverageCard } from "@/components/agile/CoverageCards";
+import { NoSubmissionsPanel } from "@/components/agile/NoSubmissionsPanel";
 import { StudentTable } from "@/components/agile/StudentTable";
 
 const SubmissionsMap = dynamic(
@@ -153,13 +154,24 @@ export default function ProjectPage({
               </div>
             </section>
 
-            {/* 3 · Map */}
+            {/* 3 · Map + no-submission lists */}
             {!isLoading && (
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                   Data collection locations
                 </h2>
-                <SubmissionsMap points={gpsPoints} />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                  <div className="lg:col-span-2">
+                    <SubmissionsMap points={gpsPoints} />
+                  </div>
+                  <div className="lg:col-span-1">
+                    <NoSubmissionsPanel
+                      records={studentRecords}
+                      choices={choices as KoboChoice[]}
+                      projectLga={projectLga}
+                    />
+                  </div>
+                </div>
               </section>
             )}
 

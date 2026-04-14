@@ -355,6 +355,54 @@ export function deriveProjectLga(
 }
 
 /**
+ * Returns the names of destination LGAs (new_school_lga choices) that have
+ * no student submissions pointing to them yet.
+ */
+export function lgasWithNoSubmissions(
+  records: StudentRecord[],
+  choices: KoboChoice[]
+): string[] {
+  const allLgas = choices.filter((c) => c.list_name === "new_school_lga");
+  if (allLgas.length === 0) return [];
+  const lgasWithSubs = new Set(records.map((r) => r.newSchoolLga).filter(Boolean));
+  return allLgas
+    .filter((c) => !lgasWithSubs.has(c.name))
+    .map((c) => (Array.isArray(c.label) ? c.label[0] : c.label ?? c.name) as string)
+    .filter(Boolean)
+    .sort();
+}
+
+/**
+ * Returns the names of EMIS officers who have not submitted anything yet.
+ * When projectLga is "" all enumerators are considered (Niger Agile projects).
+ */
+export function enumeratorsWithNoSubmissions(
+  records: StudentRecord[],
+  choices: KoboChoice[],
+  projectLga: string
+): string[] {
+  const allEnumerators = choices.filter((c) => c.list_name === "enumerator");
+  const targetEnumerators =
+    projectLga.trim() === ""
+      ? allEnumerators
+      : allEnumerators.filter((c) => {
+          const label = Array.isArray(c.label) ? c.label[0] : c.label ?? "";
+          const { lga } = parseEnumeratorLabel(String(label));
+          return lga.toLowerCase() === projectLga.toLowerCase();
+        });
+
+  const codesWithSubs = new Set(records.map((r) => r.enumeratorCode).filter(Boolean));
+  return targetEnumerators
+    .filter((c) => !codesWithSubs.has(c.name))
+    .map((c) => {
+      const raw = (Array.isArray(c.label) ? c.label[0] : c.label ?? c.name) as string;
+      return parseEnumeratorLabel(raw).name || raw;
+    })
+    .filter(Boolean)
+    .sort();
+}
+
+/**
  * GPS points for AGILE forms, grouped by previous school.
  * Each point is the average lat/lng of all submissions from that school,
  * labelled with the school name and carrying a student count.
