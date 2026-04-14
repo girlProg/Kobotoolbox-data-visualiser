@@ -1,136 +1,185 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import useSWR from "swr";
-import { KoboAsset, KoboDataResponse } from "@/lib/kobo/types";
-import { buildTimeSeries } from "@/lib/kobo/parsers";
-import { StatCard } from "@/components/dashboard/StatCard";
-import { ProjectSubmissionBar } from "@/components/dashboard/ProjectSubmissionBar";
-import { SubmissionTimeSeries } from "@/components/dashboard/SubmissionTimeSeries";
-import { LgaProgressTable } from "@/components/dashboard/LgaProgressTable";
+import { KoboChoice } from "@/lib/kobo/types";
+import { StudentRecord } from "@/lib/kobo/agile";
 import { Topbar } from "@/components/layout/Topbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GradCapIcon } from "@/components/agile/GradCapIcon";
-import type { LgaProgress } from "@/app/api/kobo/assets/progress/route";
+
+// AGILE sections (same components as the project page)
+import { AgileStatCards } from "@/components/agile/AgileStatCards";
+import { NinCaptureBar } from "@/components/agile/NinCaptureBar";
+import { SchoolCoverageCard, EnumeratorCoverageCard } from "@/components/agile/CoverageCards";
+import { LgaProgressTable } from "@/components/agile/LgaProgressTable";
+import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassChart";
+import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
+import { EnumeratorTable } from "@/components/agile/EnumeratorTable";
+
+import type { AgileOverviewResponse } from "@/app/api/kobo/agile/overview/route";
+
+const SubmissionsMap = dynamic(
+  () =>
+    import("@/components/project/SubmissionsMap").then((m) => m.SubmissionsMap),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[440px] w-full rounded-xl" />,
+  }
+);
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function DashboardPage() {
-  const { data: assets, error, isLoading } = useSWR<KoboAsset[]>(
-    "/api/kobo/assets",
-    fetcher
-  );
+  const {
+    data,
+    error,
+    isLoading,
+  } = useSWR<AgileOverviewResponse>("/api/kobo/agile/overview", fetcher, {
+    refreshInterval: 5 * 60 * 1000,
+  });
 
-  const totalSubmissions = assets?.reduce(
-    (sum, a) => sum + (a.deployment__submission_count ?? 0),
-    0
-  ) ?? 0;
-
-  const deployedCount = assets?.filter(
-    (a) => a.deployment_status === "deployed"
-  ).length ?? 0;
-
-  // For time-series, pull from the first project with submissions
-  const firstWithSubs = assets?.find(
-    (a) => a.deployment__submission_count > 0
-  );
-  const { data: firstProjectData } = useSWR<KoboDataResponse>(
-    firstWithSubs ? `/api/kobo/assets/${firstWithSubs.uid}/data` : null,
-    fetcher
-  );
-
-  const timeSeries = firstProjectData
-    ? buildTimeSeries(firstProjectData.results)
-    : [];
-
-  // Sort assets by submission count for the bar chart
-  const sortedAssets = assets
-    ? [...assets].sort(
-        (a, b) =>
-          (b.deployment__submission_count ?? 0) -
-          (a.deployment__submission_count ?? 0)
-      )
-    : [];
-
-  const lgasWithData = assets?.filter(
-    (a) => a.deployment__submission_count > 0
-  ).length ?? 0;
-
-  const { data: progressData, isLoading: progressLoading } =
-    useSWR<LgaProgress[]>("/api/kobo/assets/progress", fetcher, {
-      refreshInterval: 5 * 60 * 1000, // re-fetch every 5 min (matches server cache)
-    });
+  const records: StudentRecord[] = data?.records ?? [];
+  const choices: KoboChoice[] = (data?.choices ?? []) as KoboChoice[];
+  const gpsPoints = data?.gpsPoints ?? [];
 
   return (
     <>
       <Topbar title="Niger State AGILE — Overview" />
-      <main className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6 bg-gray-50">
+      <main className="flex-1 p-4 md:p-6 space-y-6 md:space-y-8 bg-gray-50">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>
-              Failed to load projects. Check your KOBO_TOKEN environment variable.
+              Failed to load overview data. Check your KOBO_TOKEN environment
+              variable.
             </AlertDescription>
           </Alert>
         )}
 
         {/* Banner */}
-        {!isLoading && assets && assets.length > 0 && (
-          <div className="rounded-xl bg-blue-600 text-white p-4 flex items-center gap-4">
-            <GradCapIcon />
-            <div>
-              <p className="font-semibold text-base">
-                Student Transition Tracking — Niger State
-              </p>
-              <p className="text-blue-200 text-sm">
-                Monitoring primary-to-secondary school transitions across{" "}
-                {assets.length} LGAs in Niger State (AGILE Programme)
-              </p>
-            </div>
+        <div className="rounded-xl bg-blue-600 text-white p-4 flex items-center gap-4">
+          <GradCapIcon />
+          <div>
+            <p className="font-semibold text-base">
+              Student Transition Tracking — Niger State
+            </p>
+            <p className="text-blue-200 text-sm">
+              {isLoading
+                ? "Loading data across all 22 LGAs…"
+                : `${records.length.toLocaleString()} students tracked across ${
+                    data?.totalForms ?? 0
+                  } AGILE form${data?.totalForms !== 1 ? "s" : ""} (Niger State AGILE Programme)`}
+            </p>
           </div>
-        )}
-
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <StatCard
-            title="Total students tracked"
-            value={totalSubmissions.toLocaleString()}
-            loading={isLoading}
-          />
-          <StatCard
-            title="LGAs active"
-            value={lgasWithData}
-            loading={isLoading}
-          />
-          <StatCard
-            title="Total LGA projects"
-            value={assets?.length ?? 0}
-            loading={isLoading}
-          />
-          <StatCard
-            title="Deployed projects"
-            value={deployedCount}
-            loading={isLoading}
-          />
         </div>
 
-        {/* Per-LGA submission bar chart */}
-        {isLoading ? (
-          <Skeleton className="h-72 w-full rounded-xl" />
-        ) : sortedAssets.length > 0 ? (
-          <ProjectSubmissionBar assets={sortedAssets} />
-        ) : null}
+        {/* 1 · Student overview */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Student overview
+          </h2>
+          <AgileStatCards records={records} loading={isLoading} />
+        </section>
 
-        {/* Time-series if available */}
-        {timeSeries.length > 0 && (
-          <SubmissionTimeSeries data={timeSeries} />
+        {/* 2 · Data quality */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Data quality
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-36 rounded-xl" />
+                <Skeleton className="h-36 rounded-xl" />
+                <Skeleton className="h-36 rounded-xl" />
+              </>
+            ) : (
+              <>
+                <NinCaptureBar records={records} />
+                <SchoolCoverageCard records={records} choices={choices} />
+                {/* projectLga="" → count all enumerators across every LGA */}
+                <EnumeratorCoverageCard
+                  records={records}
+                  choices={choices}
+                  projectLga=""
+                />
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* 3 · Data collection locations */}
+        {!isLoading && (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Data collection locations
+            </h2>
+            <SubmissionsMap points={gpsPoints} showStateBoundary />
+          </section>
         )}
 
-        {/* LGA progress table */}
-        {progressLoading ? (
-          <Skeleton className="h-96 w-full rounded-xl" />
-        ) : progressData && progressData.length > 0 ? (
-          <LgaProgressTable data={progressData} />
-        ) : null}
+        {/* 4 · Progress by LGA */}
+        {!isLoading && records.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Progress by LGA
+            </h2>
+            <LgaProgressTable records={records} choices={choices} />
+          </section>
+        )}
+
+        {/* 5 · Class transitions */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Class transitions
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-64 rounded-xl" />
+                <Skeleton className="h-64 rounded-xl" />
+              </>
+            ) : (
+              <>
+                <NewClassChart records={records} />
+                <PreviousClassChart records={records} />
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* 6 · School transitions */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            School transitions
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-80 rounded-xl" />
+                <Skeleton className="h-80 rounded-xl" />
+              </>
+            ) : (
+              <>
+                <SourceSchoolsChart records={records} />
+                <DestinationSchoolsChart records={records} />
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* 7 · EMIS officers */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            EMIS officers
+          </h2>
+          {isLoading ? (
+            <Skeleton className="h-48 rounded-xl" />
+          ) : (
+            <EnumeratorTable records={records} />
+          )}
+        </section>
       </main>
     </>
   );
