@@ -23,7 +23,8 @@
  *   gps / pg_cert/gps – GPS coordinates
  */
 
-import { KoboSubmission, KoboSurveyField, KoboChoice } from "./types";
+import { KoboSubmission, KoboSurveyField, KoboChoice, ParsedGpsPoint } from "./types";
+import { parseGpsString } from "./parsers";
 
 // ── Field name resolution (handles group prefixes) ─────────────────────────
 
@@ -351,6 +352,62 @@ export function deriveProjectLga(
   // Fallback: last segment of asset name, e.g. "niger_agile_Lapai" → "Lapai"
   const parts = assetName.split(/[_\s-]/);
   return parts[parts.length - 1] ?? assetName;
+}
+
+/**
+ * GPS points for AGILE forms, grouped by previous school.
+ * Each point is the average lat/lng of all submissions from that school,
+ * labelled with the school name and carrying a student count.
+ */
+export function parseAgileGpsPoints(submissions: KoboSubmission[]): ParsedGpsPoint[] {
+  // Map from school code → { name, lats, lngs }
+  const schools = new Map<string, { name: string; lats: number[]; lngs: number[] }>();
+
+  for (const sub of submissions) {
+    const schoolCode = getField(sub, "old_school");
+    const schoolName = getField(sub, "c_school") || schoolCode || "Unknown school";
+
+    // Resolve GPS field (bare or group-prefixed)
+    let rawGps: string | null = null;
+    for (const key of Object.keys(sub)) {
+      const bare = key.split("/").pop() ?? key;
+      if (bare === "gps" && sub[key] != null && sub[key] !== "") {
+        rawGps = String(sub[key]);
+        break;
+      }
+    }
+    // Also try _geolocation array
+    if (!rawGps) {
+      const geo = sub._geolocation;
+      if (Array.isArray(geo) && geo.length >= 2) {
+        const [lat, lng] = geo as [number, number];
+        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+          rawGps = `${lat} ${lng}`;
+        }
+      }
+    }
+    if (!rawGps) continue;
+
+    const pt = parseGpsString(rawGps);
+    if (!pt) continue;
+
+    const key = schoolCode || schoolName;
+    if (!schools.has(key)) {
+      schools.set(key, { name: schoolName, lats: [], lngs: [] });
+    }
+    schools.get(key)!.lats.push(pt.lat);
+    schools.get(key)!.lngs.push(pt.lng);
+  }
+
+  return Array.from(schools.values()).map(({ name, lats, lngs }) => {
+    const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+    return {
+      lat: avg(lats),
+      lng: avg(lngs),
+      label: name,
+      count: lats.length,
+    };
+  });
 }
 
 /** LGA breakdown of students */
