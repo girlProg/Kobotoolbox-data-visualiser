@@ -60,11 +60,20 @@ export function SubmissionsMap({ points }: Props) {
             <CircleMarker
               key={i}
               center={[pt.lat, pt.lng]}
-              radius={6}
+              radius={pt.count ? Math.min(6 + Math.sqrt(pt.count), 18) : 6}
               pathOptions={{ color: "#2563eb", fillColor: "#2563eb", fillOpacity: 0.7 }}
             >
               <Popup>
-                Lat: {pt.lat.toFixed(5)}, Lng: {pt.lng.toFixed(5)}
+                {pt.label ? (
+                  <div>
+                    <strong>{pt.label}</strong>
+                    {pt.count != null && (
+                      <div>{pt.count} student{pt.count !== 1 ? "s" : ""}</div>
+                    )}
+                  </div>
+                ) : (
+                  <span>Lat: {pt.lat.toFixed(5)}, Lng: {pt.lng.toFixed(5)}</span>
+                )}
               </Popup>
             </CircleMarker>
           ))}

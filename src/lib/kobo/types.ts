@@ -49,6 +49,8 @@ export interface KoboAssetsResponse {
 export interface ParsedGpsPoint {
   lat: number;
   lng: number;
+  label?: string;  // e.g. school name
+  count?: number;  // e.g. number of students at this point
 }
 
 export interface AggregatedChoice {

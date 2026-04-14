@@ -13,6 +13,7 @@ import {
   isAgileForm,
   parseStudentRecords,
   deriveProjectLga,
+  parseAgileGpsPoints,
 } from "@/lib/kobo/agile";
 import { SelectOneChart } from "@/components/project/SelectOneChart";
 import { SelectMultipleChart } from "@/components/project/SelectMultipleChart";
@@ -73,15 +74,21 @@ export default function ProjectPage({
   const studentRecords = agile
     ? parseStudentRecords(submissions, enumeratorChoiceMap)
     : [];
-  const projectLga = agile
+  // For "Niger Agile …" projects the form already contains only the relevant
+  // LGA's enumerators, so count all of them (pass "" to skip LGA filtering).
+  const isNigerAgile = /^niger\s+agile/i.test(formDef?.name ?? "");
+  const projectLga = agile && !isNigerAgile
     ? deriveProjectLga(studentRecords, formDef?.name ?? "")
     : "";
 
-  // GPS
-  const gpsFieldNames = gpsFields.length > 0
-    ? gpsFields.map((f) => f.name)
-    : ["_geolocation"];
-  const gpsPoints = parseGpsSubmissions(submissions, gpsFieldNames[0]);
+  // GPS — AGILE forms: group by school (label + count per point)
+  //        Generic forms: one point per submission
+  const gpsPoints = agile
+    ? parseAgileGpsPoints(submissions)
+    : parseGpsSubmissions(
+        submissions,
+        gpsFields.length > 0 ? gpsFields[0].name : "_geolocation"
+      );
 
   const isLoading = formLoading || dataLoading;
   const hasError = formError || dataError;
@@ -112,6 +119,7 @@ export default function ProjectPage({
         {/* ── AGILE Student Tracking Section ────────────────────────── */}
         {agile && (
           <>
+            {/* 1 · Student overview */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Student overview
@@ -119,44 +127,7 @@ export default function ProjectPage({
               <AgileStatCards records={studentRecords} loading={isLoading} />
             </section>
 
-            <section className="space-y-4">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                Class transitions
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {isLoading ? (
-                  <>
-                    <Skeleton className="h-64 rounded-xl" />
-                    <Skeleton className="h-64 rounded-xl" />
-                  </>
-                ) : (
-                  <>
-                    <NewClassChart records={studentRecords} />
-                    <PreviousClassChart records={studentRecords} />
-                  </>
-                )}
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                School transitions
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {isLoading ? (
-                  <>
-                    <Skeleton className="h-80 rounded-xl" />
-                    <Skeleton className="h-80 rounded-xl" />
-                  </>
-                ) : (
-                  <>
-                    <SourceSchoolsChart records={studentRecords} />
-                    <DestinationSchoolsChart records={studentRecords} />
-                  </>
-                )}
-              </div>
-            </section>
-
+            {/* 2 · Data quality */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Data quality
@@ -182,6 +153,57 @@ export default function ProjectPage({
               </div>
             </section>
 
+            {/* 3 · Map */}
+            {!isLoading && (
+              <section className="space-y-3">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Data collection locations
+                </h2>
+                <SubmissionsMap points={gpsPoints} />
+              </section>
+            )}
+
+            {/* 4 · Class transitions */}
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Class transitions
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {isLoading ? (
+                  <>
+                    <Skeleton className="h-64 rounded-xl" />
+                    <Skeleton className="h-64 rounded-xl" />
+                  </>
+                ) : (
+                  <>
+                    <NewClassChart records={studentRecords} />
+                    <PreviousClassChart records={studentRecords} />
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* 5 · School transitions */}
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                School transitions
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {isLoading ? (
+                  <>
+                    <Skeleton className="h-80 rounded-xl" />
+                    <Skeleton className="h-80 rounded-xl" />
+                  </>
+                ) : (
+                  <>
+                    <SourceSchoolsChart records={studentRecords} />
+                    <DestinationSchoolsChart records={studentRecords} />
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* 6 · EMIS officers */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 EMIS officers
@@ -193,6 +215,7 @@ export default function ProjectPage({
               )}
             </section>
 
+            {/* 7 · Student records */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Student records
@@ -259,11 +282,11 @@ export default function ProjectPage({
             </div>
           )}
 
-        {/* ── GPS Map (all forms) ───────────────────────────────────── */}
-        {!isLoading && (
+        {/* ── GPS Map (non-AGILE forms only — AGILE renders it inline above) */}
+        {!agile && !isLoading && (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              {agile ? "Data collection locations" : "Location"}
+              Location
             </h2>
             <SubmissionsMap points={gpsPoints} />
           </section>
