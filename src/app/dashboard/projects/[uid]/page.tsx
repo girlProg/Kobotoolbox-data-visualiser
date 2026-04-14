@@ -12,6 +12,7 @@ import {
 import {
   isAgileForm,
   parseStudentRecords,
+  deriveProjectLga,
 } from "@/lib/kobo/agile";
 import { SelectOneChart } from "@/components/project/SelectOneChart";
 import { SelectMultipleChart } from "@/components/project/SelectMultipleChart";
@@ -27,6 +28,7 @@ import { EnumeratorTable } from "@/components/agile/EnumeratorTable";
 import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassChart";
 import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
 import { NinCaptureBar } from "@/components/agile/NinCaptureBar";
+import { SchoolCoverageCard, EnumeratorCoverageCard } from "@/components/agile/CoverageCards";
 import { StudentTable } from "@/components/agile/StudentTable";
 
 const SubmissionsMap = dynamic(
@@ -71,6 +73,9 @@ export default function ProjectPage({
   const studentRecords = agile
     ? parseStudentRecords(submissions, enumeratorChoiceMap)
     : [];
+  const projectLga = agile
+    ? deriveProjectLga(studentRecords, formDef?.name ?? "")
+    : "";
 
   // GPS
   const gpsFieldNames = gpsFields.length > 0
@@ -156,11 +161,23 @@ export default function ProjectPage({
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Data quality
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {isLoading ? (
-                  <Skeleton className="h-36 rounded-xl" />
+                  <>
+                    <Skeleton className="h-36 rounded-xl" />
+                    <Skeleton className="h-36 rounded-xl" />
+                    <Skeleton className="h-36 rounded-xl" />
+                  </>
                 ) : (
-                  <NinCaptureBar records={studentRecords} />
+                  <>
+                    <NinCaptureBar records={studentRecords} />
+                    <SchoolCoverageCard records={studentRecords} choices={choices as KoboChoice[]} />
+                    <EnumeratorCoverageCard
+                      records={studentRecords}
+                      choices={choices as KoboChoice[]}
+                      projectLga={projectLga}
+                    />
+                  </>
                 )}
               </div>
             </section>

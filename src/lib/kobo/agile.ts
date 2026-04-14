@@ -23,7 +23,7 @@
  *   gps / pg_cert/gps – GPS coordinates
  */
 
-import { KoboSubmission, KoboSurveyField } from "./types";
+import { KoboSubmission, KoboSurveyField, KoboChoice } from "./types";
 
 // ── Field name resolution (handles group prefixes) ─────────────────────────
 
@@ -84,7 +84,8 @@ export interface StudentRecord {
   studentId: string;
   studentName: string;
   studentLga: string;
-  previousSchool: string;
+  previousSchoolCode: string; // raw old_school choice code
+  previousSchool: string;     // human-readable name from c_school
   previousClass: string;
   admissionNo: string;
   caregiverName: string;
@@ -146,6 +147,7 @@ export function parseStudentRecords(
       studentId: getField(sub, "student_id"),
       studentName: getField(sub, "c_name"),
       studentLga: getField(sub, "c_lga"),
+      previousSchoolCode: getField(sub, "old_school"),
       previousSchool: getField(sub, "c_school"),
       previousClass: getField(sub, "c_class"),
       admissionNo: getField(sub, "c_adm"),
@@ -250,6 +252,98 @@ export function ninCaptureStats(records: StudentRecord[]) {
   const withNin = records.filter((r) => r.hasNin).length;
   const rate = total > 0 ? Math.round((withNin / total) * 100) : 0;
   return { total, withNin, withoutNin: total - withNin, rate };
+}
+
+export interface CoverageStats {
+  total: number;
+  withSubmissions: number;
+  withoutSubmissions: number;
+  rate: number; // % that have at least one submission
+}
+
+/**
+ * Schools coverage: how many source schools (old_school choices) have
+ * at least one student submission vs how many have none yet.
+ */
+export function schoolCoverageStats(
+  records: StudentRecord[],
+  choices: KoboChoice[]
+): CoverageStats {
+  const allSchools = choices.filter((c) => c.list_name === "old_school");
+  const total = allSchools.length;
+  if (total === 0) return { total: 0, withSubmissions: 0, withoutSubmissions: 0, rate: 0 };
+
+  // Match by the school name stored in c_school (human-readable) against
+  // choice labels, or fall back to matching choice codes against old_school field
+  const schoolCodesWithSubs = new Set(
+    records.map((r) => r.previousSchoolCode).filter(Boolean)
+  );
+  // Also track by previousSchool name in case code isn't stored
+  const schoolNamesWithSubs = new Set(
+    records.map((r) => r.previousSchool.toLowerCase()).filter(Boolean)
+  );
+
+  const withSubmissions = allSchools.filter((c) => {
+    if (schoolCodesWithSubs.has(c.name)) return true;
+    const label = (Array.isArray(c.label) ? c.label[0] : c.label ?? "").toLowerCase();
+    return label && schoolNamesWithSubs.has(label);
+  }).length;
+
+  const withoutSubmissions = total - withSubmissions;
+  const rate = Math.round((withSubmissions / total) * 100);
+  return { total, withSubmissions, withoutSubmissions, rate };
+}
+
+/**
+ * Enumerator coverage: how many EMIS officers assigned to this LGA have
+ * submitted at least once vs how many haven't submitted yet.
+ * Filters the full enumerator list to the LGA of the current project.
+ */
+export function enumeratorCoverageStats(
+  records: StudentRecord[],
+  choices: KoboChoice[],
+  projectLga: string
+): CoverageStats {
+  const allEnumerators = choices.filter((c) => c.list_name === "enumerator");
+
+  // Filter to this project's LGA using the "Name | LGA | Phone" label format
+  const lgaLower = projectLga.toLowerCase();
+  const lgaEnumerators = allEnumerators.filter((c) => {
+    const label = Array.isArray(c.label) ? c.label[0] : c.label ?? "";
+    const { lga } = parseEnumeratorLabel(String(label));
+    return lga.toLowerCase() === lgaLower;
+  });
+
+  const total = lgaEnumerators.length;
+  if (total === 0) return { total: 0, withSubmissions: 0, withoutSubmissions: 0, rate: 0 };
+
+  const codesWithSubs = new Set(records.map((r) => r.enumeratorCode).filter(Boolean));
+  const withSubmissions = lgaEnumerators.filter((c) => codesWithSubs.has(c.name)).length;
+  const withoutSubmissions = total - withSubmissions;
+  const rate = Math.round((withSubmissions / total) * 100);
+  return { total, withSubmissions, withoutSubmissions, rate };
+}
+
+/**
+ * Derive the LGA name for a project from its submissions (most common
+ * enumeratorLga), falling back to parsing the asset name.
+ */
+export function deriveProjectLga(
+  records: StudentRecord[],
+  assetName: string
+): string {
+  if (records.length > 0) {
+    const freq: Record<string, number> = {};
+    for (const r of records) {
+      const lga = r.enumeratorLga || r.studentLga;
+      if (lga) freq[lga] = (freq[lga] ?? 0) + 1;
+    }
+    const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+    if (top) return top[0];
+  }
+  // Fallback: last segment of asset name, e.g. "niger_agile_Lapai" → "Lapai"
+  const parts = assetName.split(/[_\s-]/);
+  return parts[parts.length - 1] ?? assetName;
 }
 
 /** LGA breakdown of students */
