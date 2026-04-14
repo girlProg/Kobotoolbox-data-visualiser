@@ -295,9 +295,14 @@ export function schoolCoverageStats(
 }
 
 /**
- * Enumerator coverage: how many EMIS officers assigned to this LGA have
- * submitted at least once vs how many haven't submitted yet.
- * Filters the full enumerator list to the LGA of the current project.
+ * Enumerator coverage: how many EMIS officers have submitted at least once
+ * vs how many haven't submitted yet.
+ *
+ * When projectLga is provided, filters the enumerator list to that LGA
+ * using the "Name | LGA | Phone" label format.
+ * When projectLga is empty (""), counts ALL enumerators in the list —
+ * use this for per-LGA KoboToolbox projects where the form already contains
+ * only the relevant officers (e.g. all "Niger Agile …" projects).
  */
 export function enumeratorCoverageStats(
   records: StudentRecord[],
@@ -306,19 +311,21 @@ export function enumeratorCoverageStats(
 ): CoverageStats {
   const allEnumerators = choices.filter((c) => c.list_name === "enumerator");
 
-  // Filter to this project's LGA using the "Name | LGA | Phone" label format
-  const lgaLower = projectLga.toLowerCase();
-  const lgaEnumerators = allEnumerators.filter((c) => {
-    const label = Array.isArray(c.label) ? c.label[0] : c.label ?? "";
-    const { lga } = parseEnumeratorLabel(String(label));
-    return lga.toLowerCase() === lgaLower;
-  });
+  // Only filter by LGA when a specific LGA is provided
+  const targetEnumerators =
+    projectLga.trim() === ""
+      ? allEnumerators
+      : allEnumerators.filter((c) => {
+          const label = Array.isArray(c.label) ? c.label[0] : c.label ?? "";
+          const { lga } = parseEnumeratorLabel(String(label));
+          return lga.toLowerCase() === projectLga.toLowerCase();
+        });
 
-  const total = lgaEnumerators.length;
+  const total = targetEnumerators.length;
   if (total === 0) return { total: 0, withSubmissions: 0, withoutSubmissions: 0, rate: 0 };
 
   const codesWithSubs = new Set(records.map((r) => r.enumeratorCode).filter(Boolean));
-  const withSubmissions = lgaEnumerators.filter((c) => codesWithSubs.has(c.name)).length;
+  const withSubmissions = targetEnumerators.filter((c) => codesWithSubs.has(c.name)).length;
   const withoutSubmissions = total - withSubmissions;
   const rate = Math.round((withSubmissions / total) * 100);
   return { total, withSubmissions, withoutSubmissions, rate };

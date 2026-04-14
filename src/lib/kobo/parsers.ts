@@ -88,7 +88,18 @@ export function parseGpsSubmissions(
       }
       continue;
     }
-    const raw = sub[gpsFieldName];
+
+    // Try direct key first, then any group-prefixed variant (e.g. pg_cert/gps)
+    let raw: unknown = sub[gpsFieldName];
+    if (raw == null || raw === "") {
+      for (const key of Object.keys(sub)) {
+        if (key.endsWith("/" + gpsFieldName) && sub[key] != null && sub[key] !== "") {
+          raw = sub[key];
+          break;
+        }
+      }
+    }
+
     if (typeof raw === "string" && raw.trim()) {
       const pt = parseGpsString(raw);
       if (pt) points.push(pt);

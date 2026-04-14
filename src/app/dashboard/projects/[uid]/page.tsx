@@ -73,7 +73,10 @@ export default function ProjectPage({
   const studentRecords = agile
     ? parseStudentRecords(submissions, enumeratorChoiceMap)
     : [];
-  const projectLga = agile
+  // For "Niger Agile …" projects the form already contains only the relevant
+  // LGA's enumerators, so count all of them (pass "" to skip LGA filtering).
+  const isNigerAgile = /^niger\s+agile/i.test(formDef?.name ?? "");
+  const projectLga = agile && !isNigerAgile
     ? deriveProjectLga(studentRecords, formDef?.name ?? "")
     : "";
 
