@@ -31,6 +31,7 @@ import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/
 import { NinCaptureBar } from "@/components/agile/NinCaptureBar";
 import { SchoolCoverageCard, EnumeratorCoverageCard } from "@/components/agile/CoverageCards";
 import { NoSubmissionsPanel } from "@/components/agile/NoSubmissionsPanel";
+import { LgaProgressTable } from "@/components/agile/LgaProgressTable";
 import { StudentTable } from "@/components/agile/StudentTable";
 
 const SubmissionsMap = dynamic(
@@ -128,7 +129,24 @@ export default function ProjectPage({
               <AgileStatCards records={studentRecords} loading={isLoading} />
             </section>
 
-            {/* 2 · Data quality */}
+            {/* 2 · LGA progress table (Niger Agile main form only) */}
+            {isNigerAgile && (
+              <section className="space-y-4">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Progress by LGA
+                </h2>
+                {isLoading ? (
+                  <Skeleton className="h-80 rounded-xl" />
+                ) : (
+                  <LgaProgressTable
+                    records={studentRecords}
+                    choices={choices as KoboChoice[]}
+                  />
+                )}
+              </section>
+            )}
+
+            {/* 3 · Data quality */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Data quality
