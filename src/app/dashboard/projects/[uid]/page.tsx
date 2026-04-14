@@ -129,24 +129,7 @@ export default function ProjectPage({
               <AgileStatCards records={studentRecords} loading={isLoading} />
             </section>
 
-            {/* 2 · LGA progress table (Niger Agile main form only) */}
-            {isNigerAgile && (
-              <section className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  Progress by LGA
-                </h2>
-                {isLoading ? (
-                  <Skeleton className="h-80 rounded-xl" />
-                ) : (
-                  <LgaProgressTable
-                    records={studentRecords}
-                    choices={choices as KoboChoice[]}
-                  />
-                )}
-              </section>
-            )}
-
-            {/* 3 · Data quality */}
+            {/* 2 · Data quality */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Data quality
@@ -193,7 +176,20 @@ export default function ProjectPage({
               </section>
             )}
 
-            {/* 4 · Class transitions */}
+            {/* 4 · LGA progress table (Niger Agile main form only) */}
+            {isNigerAgile && !isLoading && (
+              <section className="space-y-4">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Progress by LGA
+                </h2>
+                <LgaProgressTable
+                  records={studentRecords}
+                  choices={choices as KoboChoice[]}
+                />
+              </section>
+            )}
+
+            {/* 5 · Class transitions */}
             <section className="space-y-4">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Class transitions
