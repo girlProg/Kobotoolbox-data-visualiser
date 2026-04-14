@@ -458,6 +458,34 @@ export function parseAgileGpsPoints(submissions: KoboSubmission[]): ParsedGpsPoi
   });
 }
 
+// ── Static student roster counts per LGA ────────────────────────────────────
+// Extracted from the Niger State AGILE XLSForm choices sheets (v4, all LGAs).
+// These are the pre-loaded student lists and do not change during data collection.
+const LGA_STUDENT_TOTALS: Record<string, number> = {
+  "Agaie":     1832,
+  "Agwara":     823,
+  "Bida":      3124,
+  "Borgu":     1513,
+  "Bosso":     2529,
+  "Chanchaga": 2888,
+  "Gbako":     1389,
+  "Gurara":    1627,
+  "Katcha":    1538,
+  "Kontagora": 2548,
+  "Lapai":     1335,
+  "Lavun":     1670,
+  "Magama":    1440,
+  "Mariga":     917,
+  "Mashegu":   1315,
+  "Mokwa":     1615,
+  "Munya":     1316,
+  "Paikoro":   1193,
+  "Rafi":      1371,
+  "Shiroro":   1154,
+  "Tafa":      1709,
+  "Wushishi":  1449,
+};
+
 export interface LgaProgressRow {
   lga: string;
   done: number;
@@ -468,113 +496,28 @@ export interface LgaProgressRow {
  * Per-LGA submission progress for a multi-LGA form (e.g. "Niger Agile").
  *
  * Done  → records grouped by enumeratorLga (from "Name | LGA | Phone" label).
- * Total → tries three sources in order:
- *   1. student_id choices that carry an "lga" extra property (KoboToolbox
- *      returns custom XLSForm columns on choice objects).
- *   2. old_school choices that carry an "lga" property × avg students/school.
- *   3. Falls back to 0 (table renders "–" for total/left/%).
- * LGA list → from new_school_lga choices; falls back to unique enumeratorLga
- *            values observed in records.
+ * Total → static counts extracted from the v4 XLSForm choices sheets.
+ * LGA list → LGA_STUDENT_TOTALS keys (canonical 22-LGA list).
  */
 export function lgaProgressStats(
   records: StudentRecord[],
-  choices: KoboChoice[]
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _choices: KoboChoice[]
 ): LgaProgressRow[] {
-  // ── 1. Build LGA list ────────────────────────────────────────────────────
-  const lgaChoices = choices.filter((c) => c.list_name === "new_school_lga");
-  const lgaList: string[] = lgaChoices.length > 0
-    ? lgaChoices.map((c) =>
-        ((Array.isArray(c.label) ? c.label[0] : c.label) ?? c.name) as string
-      )
-    : Array.from(new Set(
-        records.map((r) => r.enumeratorLga || r.studentLga).filter(Boolean)
-      ));
-
-  // ── 2. Done per LGA ──────────────────────────────────────────────────────
+  // Done per LGA from submitted records
   const doneByLga = new Map<string, number>();
   for (const r of records) {
     const lga = r.enumeratorLga || r.studentLga;
     if (!lga) continue;
     doneByLga.set(lga, (doneByLga.get(lga) ?? 0) + 1);
   }
-  // Also accumulate by new_school_lga choice code for matching flexibility
-  const doneByCode = new Map<string, number>();
-  for (const r of records) {
-    const code = r.newSchoolLga;
-    if (!code) continue;
-    doneByCode.set(code, (doneByCode.get(code) ?? 0) + 1);
-  }
 
-  // ── 3. Total per LGA (best-effort) ───────────────────────────────────────
-
-  // 3a. student_id choices with an "lga" extra property
-  const totalByLga = new Map<string, number>();
-  const studentChoices = choices.filter((c) => c.list_name === "student_id");
-  let studentChoicesHaveLga = false;
-  for (const c of studentChoices) {
-    const lgaVal =
-      (c["lga"] ?? c["lga_name"] ?? c["c_lga"] ?? c["student_lga"]) as string | undefined;
-    if (lgaVal) {
-      studentChoicesHaveLga = true;
-      totalByLga.set(lgaVal, (totalByLga.get(lgaVal) ?? 0) + 1);
-    }
-  }
-
-  // 3b. old_school choices with an "lga" property → count students per school
-  //     using the average students-per-school from submitted records
-  if (!studentChoicesHaveLga) {
-    const schoolChoices = choices.filter((c) => c.list_name === "old_school");
-    const schoolLgaMap = new Map<string, string>(); // school code → lga
-    for (const c of schoolChoices) {
-      const lgaVal =
-        (c["lga"] ?? c["lga_name"] ?? c["lga_code"]) as string | undefined;
-      if (lgaVal) schoolLgaMap.set(c.name, lgaVal);
-    }
-    if (schoolLgaMap.size > 0) {
-      // Students per school from records
-      const studentsPerSchool = new Map<string, number>();
-      for (const r of records) {
-        if (!r.previousSchoolCode) continue;
-        studentsPerSchool.set(
-          r.previousSchoolCode,
-          (studentsPerSchool.get(r.previousSchoolCode) ?? 0) + 1
-        );
-      }
-      const totalStudents = records.length;
-      const totalSchools = studentsPerSchool.size || 1;
-      const avgPerSchool = totalStudents / totalSchools;
-
-      for (const c of schoolChoices) {
-        const lga = schoolLgaMap.get(c.name);
-        if (!lga) continue;
-        const knownStudents = studentsPerSchool.get(c.name) ?? avgPerSchool;
-        totalByLga.set(lga, (totalByLga.get(lga) ?? 0) + knownStudents);
-      }
-      // Round the estimates
-      Array.from(totalByLga.entries()).forEach(([k, v]) => totalByLga.set(k, Math.round(v)));
-    }
-  }
-
-  // ── 4. Build rows ────────────────────────────────────────────────────────
-  return lgaList
-    .map((lga) => {
-      const lgaCode = lgaChoices.find((c) => {
-        const label = (Array.isArray(c.label) ? c.label[0] : c.label) ?? "";
-        return label === lga;
-      })?.name ?? lga;
-
-      const done =
-        doneByLga.get(lga) ??
-        doneByCode.get(lgaCode) ??
-        0;
-
-      const total =
-        totalByLga.get(lga) ??
-        totalByLga.get(lgaCode) ??
-        0;
-
-      return { lga, done, total };
-    })
+  return Object.entries(LGA_STUDENT_TOTALS)
+    .map(([lga, total]) => ({
+      lga,
+      done: doneByLga.get(lga) ?? 0,
+      total,
+    }))
     .sort((a, b) => b.done - a.done);
 }
 
