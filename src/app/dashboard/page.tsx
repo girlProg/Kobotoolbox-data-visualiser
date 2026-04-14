@@ -6,10 +6,12 @@ import { buildTimeSeries } from "@/lib/kobo/parsers";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ProjectSubmissionBar } from "@/components/dashboard/ProjectSubmissionBar";
 import { SubmissionTimeSeries } from "@/components/dashboard/SubmissionTimeSeries";
+import { LgaProgressTable } from "@/components/dashboard/LgaProgressTable";
 import { Topbar } from "@/components/layout/Topbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GradCapIcon } from "@/components/agile/GradCapIcon";
+import type { LgaProgress } from "@/app/api/kobo/assets/progress/route";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -53,6 +55,11 @@ export default function DashboardPage() {
   const lgasWithData = assets?.filter(
     (a) => a.deployment__submission_count > 0
   ).length ?? 0;
+
+  const { data: progressData, isLoading: progressLoading } =
+    useSWR<LgaProgress[]>("/api/kobo/assets/progress", fetcher, {
+      refreshInterval: 5 * 60 * 1000, // re-fetch every 5 min (matches server cache)
+    });
 
   return (
     <>
@@ -117,6 +124,13 @@ export default function DashboardPage() {
         {timeSeries.length > 0 && (
           <SubmissionTimeSeries data={timeSeries} />
         )}
+
+        {/* LGA progress table */}
+        {progressLoading ? (
+          <Skeleton className="h-96 w-full rounded-xl" />
+        ) : progressData && progressData.length > 0 ? (
+          <LgaProgressTable data={progressData} />
+        ) : null}
       </main>
     </>
   );

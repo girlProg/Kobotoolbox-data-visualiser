@@ -458,6 +458,69 @@ export function parseAgileGpsPoints(submissions: KoboSubmission[]): ParsedGpsPoi
   });
 }
 
+// ── Static student roster counts per LGA ────────────────────────────────────
+// Extracted from the Niger State AGILE XLSForm choices sheets (v4, all LGAs).
+// These are the pre-loaded student lists and do not change during data collection.
+const LGA_STUDENT_TOTALS: Record<string, number> = {
+  "Agaie":     1832,
+  "Agwara":     823,
+  "Bida":      3124,
+  "Borgu":     1513,
+  "Bosso":     2529,
+  "Chanchaga": 2888,
+  "Gbako":     1389,
+  "Gurara":    1627,
+  "Katcha":    1538,
+  "Kontagora": 2548,
+  "Lapai":     1335,
+  "Lavun":     1670,
+  "Magama":    1440,
+  "Mariga":     917,
+  "Mashegu":   1315,
+  "Mokwa":     1615,
+  "Munya":     1316,
+  "Paikoro":   1193,
+  "Rafi":      1371,
+  "Shiroro":   1154,
+  "Tafa":      1709,
+  "Wushishi":  1449,
+};
+
+export interface LgaProgressRow {
+  lga: string;
+  done: number;
+  total: number; // 0 = unknown / not available from form metadata
+}
+
+/**
+ * Per-LGA submission progress for a multi-LGA form (e.g. "Niger Agile").
+ *
+ * Done  → records grouped by enumeratorLga (from "Name | LGA | Phone" label).
+ * Total → static counts extracted from the v4 XLSForm choices sheets.
+ * LGA list → LGA_STUDENT_TOTALS keys (canonical 22-LGA list).
+ */
+export function lgaProgressStats(
+  records: StudentRecord[],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _choices: KoboChoice[]
+): LgaProgressRow[] {
+  // Done per LGA from submitted records
+  const doneByLga = new Map<string, number>();
+  for (const r of records) {
+    const lga = r.enumeratorLga || r.studentLga;
+    if (!lga) continue;
+    doneByLga.set(lga, (doneByLga.get(lga) ?? 0) + 1);
+  }
+
+  return Object.entries(LGA_STUDENT_TOTALS)
+    .map(([lga, total]) => ({
+      lga,
+      done: doneByLga.get(lga) ?? 0,
+      total,
+    }))
+    .sort((a, b) => b.done - a.done);
+}
+
 /** LGA breakdown of students */
 export function studentsByLga(
   records: StudentRecord[]

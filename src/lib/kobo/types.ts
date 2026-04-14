@@ -26,6 +26,7 @@ export interface KoboChoice {
   list_name: string;
   name: string;
   label?: string | string[];
+  [key: string]: unknown; // KoboToolbox may return extra columns (e.g. lga, school_code)
 }
 
 export interface KoboSubmission {
