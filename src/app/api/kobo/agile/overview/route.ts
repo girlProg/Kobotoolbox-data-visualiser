@@ -144,7 +144,7 @@ export async function GET() {
   // enumerator counts, producing totals that disagree with the project page.
   const mainChoices = (mainForm.content?.choices ?? []) as KoboChoice[];
 
-  // ── 6. Parse & merge StudentRecords ──────────────────────────────────────
+  // ── 6. Parse & de-duplicate StudentRecords ───────────────────────────────
   //
   // Each form is parsed with ITS OWN enumerator map so "Name | LGA | Phone"
   // labels resolve correctly regardless of which choice codes the form uses.
@@ -153,37 +153,14 @@ export async function GET() {
   // enumerator label doesn't follow the pipe convention), we fall back to the
   // LGA inferred from the form name itself ("Niger Agile Agaie" → "Agaie").
   //
-  // De-duplication strategy:
-  //   • Main form  → ALL records are kept as-is (no dedup within the main form).
-  //     Deduplicating within the main form drops submissions where two enumerators
-  //     picked the same studentId code, making the overview count disagree with
-  //     what the Niger Agile project page shows.
-  //   • Backup forms → only records whose studentId was NOT already seen in the
-  //     main form are added, preventing double-counting of students who managed
-  //     to submit on the main form and also appear in a backup form.
-  const mainStudentIds = new Set<string>();
+  // All records are de-duplicated by studentId across all forms. The main form
+  // is processed first so its records take priority; backup-form records are
+  // only added for students whose studentId hasn't been seen yet.
+  const seenStudentIds = new Set<string>();
   const mergedRecords: StudentRecord[] = [];
   const allSubmissions: KoboSubmission[] = [];
 
-  // ── Pass 1: main form — add everything ────────────────────────────────────
-  const mainData = formSubmissions[0];
-  {
-    const formChoices = (mainData.form.content?.choices ?? []) as KoboChoice[];
-    const enumMap = new Map<string, string>(
-      formChoices
-        .filter((c) => c.list_name === "enumerator")
-        .map((c) => [c.name, getLabel(c.label, c.name)])
-    );
-    const records = parseStudentRecords(mainData.submissions, enumMap);
-    for (const record of records) {
-      mergedRecords.push(record);
-      if (record.studentId) mainStudentIds.add(record.studentId);
-    }
-    allSubmissions.push(...mainData.submissions);
-  }
-
-  // ── Pass 2: backup forms — add only students not in main form ─────────────
-  for (const { form, submissions } of formSubmissions.slice(1)) {
+  for (const { form, submissions } of formSubmissions) {
     const formChoices = (form.content?.choices ?? []) as KoboChoice[];
     const enumMap = new Map<string, string>(
       formChoices
@@ -192,20 +169,21 @@ export async function GET() {
     );
 
     // LGA fallback: strip "Niger Agile " prefix → "Agaie", "Bida", etc.
+    // Empty for the main form (no LGA suffix).
     const formLga = form.name.replace(/^niger\s+agile\s*/i, "").trim();
 
     const records = parseStudentRecords(submissions, enumMap);
     for (const record of records) {
-      // Skip if this student already submitted on the main form
-      if (record.studentId && mainStudentIds.has(record.studentId)) continue;
-
       // Fill missing LGA from form name so the record counts in the right LGA
       if (!record.enumeratorLga && !record.studentLga && formLga) {
         record.enumeratorLga = formLga;
       }
 
-      mergedRecords.push(record);
-      if (record.studentId) mainStudentIds.add(record.studentId);
+      const key = record.studentId || `sub_${record.submissionId}`;
+      if (!seenStudentIds.has(key)) {
+        seenStudentIds.add(key);
+        mergedRecords.push(record);
+      }
     }
 
     allSubmissions.push(...submissions);
