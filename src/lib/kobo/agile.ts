@@ -534,3 +534,36 @@ export function studentsByLga(
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count);
 }
+
+/**
+ * Duplicate submission stats.
+ *
+ * A "duplicate" is any submission whose studentId has already been seen in the
+ * same record set. For example, if studentId "AGAIE_001" appears 3 times,
+ * that counts as 2 duplicates affecting 1 student.
+ *
+ * Records with no studentId (empty string) are excluded from duplicate
+ * detection since they cannot be meaningfully compared.
+ */
+export function duplicateSubmissionStats(records: StudentRecord[]): {
+  total: number;
+  duplicateSubmissions: number;
+  affectedStudents: number;
+} {
+  const counts = new Map<string, number>();
+  for (const r of records) {
+    if (!r.studentId) continue;
+    counts.set(r.studentId, (counts.get(r.studentId) ?? 0) + 1);
+  }
+
+  let duplicateSubmissions = 0;
+  let affectedStudents = 0;
+  Array.from(counts.values()).forEach((count) => {
+    if (count > 1) {
+      duplicateSubmissions += count - 1; // extra submissions beyond the first
+      affectedStudents += 1;
+    }
+  });
+
+  return { total: records.length, duplicateSubmissions, affectedStudents };
+}
