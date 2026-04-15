@@ -567,3 +567,21 @@ export function duplicateSubmissionStats(records: StudentRecord[]): {
 
   return { total: records.length, duplicateSubmissions, affectedStudents };
 }
+
+/**
+ * Returns source LGAs (from the canonical 22-LGA list) that have zero
+ * student submissions. Uses enumeratorLga / studentLga from records —
+ * i.e. the LGA the enumerator is working in, not the destination LGA.
+ *
+ * Used on the overview page where all 22 LGAs are in scope.
+ */
+export function sourceLgasWithNoSubmissions(records: StudentRecord[]): string[] {
+  const lgasWithSubs = new Set<string>();
+  for (const r of records) {
+    const lga = r.enumeratorLga || r.studentLga;
+    if (lga) lgasWithSubs.add(lga);
+  }
+  return Object.keys(LGA_STUDENT_TOTALS)
+    .filter((lga) => !lgasWithSubs.has(lga))
+    .sort();
+}

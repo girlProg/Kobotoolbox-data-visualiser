@@ -2,6 +2,7 @@
 
 import {
   lgasWithNoSubmissions,
+  sourceLgasWithNoSubmissions,
   enumeratorsWithNoSubmissions,
   StudentRecord,
 } from "@/lib/kobo/agile";
@@ -24,7 +25,12 @@ function EmptyBadge({ count, label }: { count: number; label: string }) {
 }
 
 export function NoSubmissionsPanel({ records, choices, projectLga }: Props) {
-  const missingLgas = lgasWithNoSubmissions(records, choices);
+  // When projectLga is "" (overview / all-LGA context), check which of the
+  // 22 source LGAs have no submissions at all.  For single-LGA projects,
+  // use the original destination-LGA check (new_school_lga choices).
+  const missingLgas = projectLga === ""
+    ? sourceLgasWithNoSubmissions(records)
+    : lgasWithNoSubmissions(records, choices);
   const missingOfficers = enumeratorsWithNoSubmissions(records, choices, projectLga);
 
   return (
