@@ -140,6 +140,7 @@ export default function ProjectPage({
                     <Skeleton className="h-36 rounded-xl" />
                     <Skeleton className="h-36 rounded-xl" />
                     <Skeleton className="h-36 rounded-xl" />
+                    <Skeleton className="h-36 rounded-xl" />
                   </>
                 ) : (
                   <>
