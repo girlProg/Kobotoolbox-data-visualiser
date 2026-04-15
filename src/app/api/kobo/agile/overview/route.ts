@@ -4,9 +4,17 @@
  * Fetches submissions from every deployed AGILE form, merges them into a
  * single de-duplicated set of StudentRecord[], and returns:
  *   - records       — merged student records (de-duplicated by studentId)
- *   - choices       — merged KoboChoice[] from all forms (union by list+name)
+ *   - choices       — choices from the MAIN form only (authoritative)
  *   - gpsPoints     — school GPS averages across all forms
  *   - formsIncluded — names of forms that were aggregated
+ *
+ * Why choices come from the main form only:
+ *   The "Niger Agile" form is the comprehensive form — it holds every LGA's
+ *   students, schools, and enumerators as choices.  Backup per-LGA forms hold
+ *   only a subset, and often use different choice codes for the same entities.
+ *   Merging choices from all forms inflates school / enumerator counts and
+ *   produces stats that don't match what you see on the Niger Agile project
+ *   page.  Using the main form's choices exclusively gives consistent totals.
  *
  * Cached for 5 minutes at the CDN/proxy layer.
  */
@@ -106,15 +114,22 @@ export async function GET() {
     });
   }
 
-  // Sort: put the main "Niger Agile" form first so its records take priority
-  // during de-duplication.
+  // ── 3. Identify the main form ─────────────────────────────────────────────
+  // Priority 1: name is exactly "Niger Agile" (optional trailing whitespace).
+  // Priority 2: highest submission count (the primary form always has the most).
   agileForms.sort((a, b) => {
     const aMain = /^niger\s+agile\s*$/i.test(a.name);
     const bMain = /^niger\s+agile\s*$/i.test(b.name);
-    return aMain ? -1 : bMain ? 1 : 0;
+    if (aMain !== bMain) return aMain ? -1 : 1;
+    return (
+      (b.deployment__submission_count ?? 0) -
+      (a.deployment__submission_count ?? 0)
+    );
   });
 
-  // ── 3. Fetch all submissions per form in parallel ─────────────────────────
+  const mainForm = agileForms[0];
+
+  // ── 4. Fetch all submissions per form in parallel ─────────────────────────
   const formSubmissions = await Promise.all(
     agileForms.map(async (form) => ({
       form,
@@ -122,37 +137,48 @@ export async function GET() {
     }))
   );
 
-  // ── 4. Merge choices (union by list_name + name) ──────────────────────────
-  const seenChoiceKeys = new Set<string>();
-  const mergedChoices: KoboChoice[] = [];
+  // ── 5. Authoritative choices come from the main form ONLY ─────────────────
+  //
+  // Backup LGA forms carry only a subset of choices and sometimes use different
+  // codes for the same schools / enumerators.  Merging them inflates school and
+  // enumerator counts, producing totals that disagree with the project page.
+  const mainChoices = (mainForm.content?.choices ?? []) as KoboChoice[];
 
-  for (const { form } of formSubmissions) {
-    for (const choice of (form.content?.choices ?? []) as KoboChoice[]) {
-      const key = `${choice.list_name}::${choice.name}`;
-      if (!seenChoiceKeys.has(key)) {
-        seenChoiceKeys.add(key);
-        mergedChoices.push(choice);
-      }
-    }
-  }
-
-  // ── 5. Parse & de-duplicate StudentRecords ────────────────────────────────
+  // ── 6. Parse & de-duplicate StudentRecords ───────────────────────────────
+  //
+  // Each form is parsed with ITS OWN enumerator map so "Name | LGA | Phone"
+  // labels resolve correctly regardless of which choice codes the form uses.
+  //
+  // For any records where enumeratorLga is still empty after parsing (e.g. the
+  // enumerator label doesn't follow the pipe convention), we fall back to the
+  // LGA inferred from the form name itself ("Niger Agile Agaie" → "Agaie").
+  //
+  // All records are de-duplicated by studentId across all forms. The main form
+  // is processed first so its records take priority; backup-form records are
+  // only added for students whose studentId hasn't been seen yet.
   const seenStudentIds = new Set<string>();
   const mergedRecords: StudentRecord[] = [];
   const allSubmissions: KoboSubmission[] = [];
 
   for (const { form, submissions } of formSubmissions) {
-    const choices = (form.content?.choices ?? []) as KoboChoice[];
-    const enumeratorMap = new Map<string, string>(
-      choices
+    const formChoices = (form.content?.choices ?? []) as KoboChoice[];
+    const enumMap = new Map<string, string>(
+      formChoices
         .filter((c) => c.list_name === "enumerator")
         .map((c) => [c.name, getLabel(c.label, c.name)])
     );
 
-    const records = parseStudentRecords(submissions, enumeratorMap);
+    // LGA fallback: strip "Niger Agile " prefix → "Agaie", "Bida", etc.
+    // Empty for the main form (no LGA suffix).
+    const formLga = form.name.replace(/^niger\s+agile\s*/i, "").trim();
 
+    const records = parseStudentRecords(submissions, enumMap);
     for (const record of records) {
-      // De-duplicate: prefer the first occurrence (Niger Agile = primary form)
+      // Fill missing LGA from form name so the record counts in the right LGA
+      if (!record.enumeratorLga && !record.studentLga && formLga) {
+        record.enumeratorLga = formLga;
+      }
+
       const key = record.studentId || `sub_${record.submissionId}`;
       if (!seenStudentIds.has(key)) {
         seenStudentIds.add(key);
@@ -163,13 +189,13 @@ export async function GET() {
     allSubmissions.push(...submissions);
   }
 
-  // ── 6. GPS points (deduplicated by school, averaged across all forms) ─────
+  // ── 7. GPS points (averaged per school across all forms) ─────────────────
   const gpsPoints: ParsedGpsPoint[] = parseAgileGpsPoints(allSubmissions);
 
   return NextResponse.json<AgileOverviewResponse>(
     {
       records: mergedRecords,
-      choices: mergedChoices,
+      choices: mainChoices,   // authoritative — main form only
       gpsPoints,
       formsIncluded: agileForms.map((f) => f.name),
       totalForms: agileForms.length,

@@ -29,7 +29,7 @@ import { EnumeratorTable } from "@/components/agile/EnumeratorTable";
 import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassChart";
 import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
 import { NinCaptureBar } from "@/components/agile/NinCaptureBar";
-import { SchoolCoverageCard, EnumeratorCoverageCard } from "@/components/agile/CoverageCards";
+import { SchoolCoverageCard, EnumeratorCoverageCard, DuplicatesCard } from "@/components/agile/CoverageCards";
 import { NoSubmissionsPanel } from "@/components/agile/NoSubmissionsPanel";
 import { LgaProgressTable } from "@/components/agile/LgaProgressTable";
 import { StudentTable } from "@/components/agile/StudentTable";
@@ -150,6 +150,7 @@ export default function ProjectPage({
                       choices={choices as KoboChoice[]}
                       projectLga={projectLga}
                     />
+                    <DuplicatesCard records={studentRecords} />
                   </>
                 )}
               </div>

@@ -12,7 +12,7 @@ import { GradCapIcon } from "@/components/agile/GradCapIcon";
 // AGILE sections (same components as the project page)
 import { AgileStatCards } from "@/components/agile/AgileStatCards";
 import { NinCaptureBar } from "@/components/agile/NinCaptureBar";
-import { SchoolCoverageCard, EnumeratorCoverageCard } from "@/components/agile/CoverageCards";
+import { SchoolCoverageCard, EnumeratorCoverageCard, DuplicatesCard } from "@/components/agile/CoverageCards";
 import { LgaProgressTable } from "@/components/agile/LgaProgressTable";
 import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassChart";
 import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
@@ -104,6 +104,7 @@ export default function DashboardPage() {
                   choices={choices}
                   projectLga=""
                 />
+                <DuplicatesCard records={records} />
               </>
             )}
           </div>
