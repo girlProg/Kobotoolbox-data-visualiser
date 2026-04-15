@@ -17,6 +17,7 @@ import { LgaProgressTable } from "@/components/agile/LgaProgressTable";
 import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassChart";
 import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
 import { EnumeratorTable } from "@/components/agile/EnumeratorTable";
+import { NoSubmissionsPanel } from "@/components/agile/NoSubmissionsPanel";
 
 import type { AgileOverviewResponse } from "@/app/api/kobo/agile/overview/route";
 
@@ -87,9 +88,10 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Data quality
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {isLoading ? (
               <>
+                <Skeleton className="h-36 rounded-xl" />
                 <Skeleton className="h-36 rounded-xl" />
                 <Skeleton className="h-36 rounded-xl" />
                 <Skeleton className="h-36 rounded-xl" />
@@ -116,7 +118,18 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Data collection locations
             </h2>
-            <SubmissionsMap points={gpsPoints} showStateBoundary />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              <div className="lg:col-span-2">
+                <SubmissionsMap points={gpsPoints} showStateBoundary />
+              </div>
+              <div className="lg:col-span-1">
+                <NoSubmissionsPanel
+                  records={records}
+                  choices={choices}
+                  projectLga=""
+                />
+              </div>
+            </div>
           </section>
         )}
 

@@ -134,9 +134,10 @@ export default function ProjectPage({
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
                 Data quality
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {isLoading ? (
                   <>
+                    <Skeleton className="h-36 rounded-xl" />
                     <Skeleton className="h-36 rounded-xl" />
                     <Skeleton className="h-36 rounded-xl" />
                     <Skeleton className="h-36 rounded-xl" />
