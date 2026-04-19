@@ -585,3 +585,63 @@ export function sourceLgasWithNoSubmissions(records: StudentRecord[]): string[] 
     .filter((lga) => !lgasWithSubs.has(lga))
     .sort();
 }
+
+// ── Daily submissions per LGA ────────────────────────────────────────────────
+
+export interface DailyLgaRow {
+  date: string;              // "YYYY-MM-DD"
+  [lga: string]: number | string; // lga name → count (plus the date key)
+}
+
+/**
+ * Returns the last `days` calendar days of submissions broken down by LGA,
+ * suitable for a stacked bar chart. Each row has a `date` key plus one key
+ * per LGA that had submissions in the window.
+ */
+export function dailySubmissionsByLga(
+  records: StudentRecord[],
+  days = 14
+): { rows: DailyLgaRow[]; lgas: string[] } {
+  // Build date range (today back `days` days, inclusive)
+  const today = new Date();
+  const dateKeys: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    dateKeys.push(d.toISOString().slice(0, 10));
+  }
+
+  // Count submissions per date+LGA
+  const counts: Record<string, Record<string, number>> = {};
+  for (const key of dateKeys) counts[key] = {};
+
+  for (const r of records) {
+    if (!r.submissionTime) continue;
+    const date = r.submissionTime.slice(0, 10);
+    if (!counts[date]) continue; // outside the window
+    const lga = r.enumeratorLga || r.studentLga || "Unknown";
+    counts[date][lga] = (counts[date][lga] ?? 0) + 1;
+  }
+
+  // Collect all LGAs that appear in the window, sorted by total desc
+  const lgaTotals: Record<string, number> = {};
+  for (const dayCounts of Object.values(counts)) {
+    for (const [lga, n] of Object.entries(dayCounts)) {
+      lgaTotals[lga] = (lgaTotals[lga] ?? 0) + n;
+    }
+  }
+  const lgas = Object.keys(lgaTotals).sort(
+    (a, b) => lgaTotals[b] - lgaTotals[a]
+  );
+
+  // Build rows — only include days that have at least one submission
+  const rows: DailyLgaRow[] = dateKeys
+    .map((date) => {
+      const row: DailyLgaRow = { date };
+      for (const lga of lgas) row[lga] = counts[date][lga] ?? 0;
+      return row;
+    })
+    .filter((row) => lgas.some((lga) => (row[lga] as number) > 0));
+
+  return { rows, lgas };
+}

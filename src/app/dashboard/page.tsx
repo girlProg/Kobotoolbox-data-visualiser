@@ -18,6 +18,7 @@ import { NewClassChart, PreviousClassChart } from "@/components/agile/NewClassCh
 import { SourceSchoolsChart, DestinationSchoolsChart } from "@/components/agile/SchoolFlowCharts";
 import { EnumeratorTable } from "@/components/agile/EnumeratorTable";
 import { NoSubmissionsPanel } from "@/components/agile/NoSubmissionsPanel";
+import { DailySubmissionsChart } from "@/components/agile/DailySubmissionsChart";
 
 import type { AgileOverviewResponse } from "@/app/api/kobo/agile/overview/route";
 
@@ -83,7 +84,17 @@ export default function DashboardPage() {
           <AgileStatCards records={records} loading={isLoading} />
         </section>
 
-        {/* 2 · Data quality */}
+        {/* 2 · Daily submissions per LGA */}
+        {!isLoading && records.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Daily activity
+            </h2>
+            <DailySubmissionsChart records={records} />
+          </section>
+        )}
+
+        {/* 3 · Data quality */}
         <section className="space-y-4">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Data quality
