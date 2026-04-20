@@ -645,3 +645,63 @@ export function dailySubmissionsByLga(
 
   return { rows, lgas };
 }
+
+// ── Daily officer activity ───────────────────────────────────────────────────
+
+export interface OfficerDayEntry {
+  enumeratorCode: string;
+  enumeratorLabel: string;
+  enumeratorLga: string;
+  count: number;
+  records: StudentRecord[];
+}
+
+export interface DailyOfficerSummary {
+  date: string;               // "YYYY-MM-DD"
+  totalSubmissions: number;
+  officers: OfficerDayEntry[];
+}
+
+/**
+ * Group all submissions by calendar date, then by officer within each date.
+ * Dates are sorted most-recent first; officers within each date sorted by
+ * submission count descending.
+ */
+export function dailyOfficerSummary(records: StudentRecord[]): DailyOfficerSummary[] {
+  const dateMap = new Map<string, Map<string, OfficerDayEntry>>();
+
+  for (const r of records) {
+    const date = r.submissionTime?.slice(0, 10);
+    if (!date) continue;
+    const key = r.enumeratorCode || r.enumeratorLabel || "Unknown";
+
+    if (!dateMap.has(date)) dateMap.set(date, new Map());
+    const officers = dateMap.get(date)!;
+
+    if (!officers.has(key)) {
+      officers.set(key, {
+        enumeratorCode: r.enumeratorCode,
+        enumeratorLabel: r.enumeratorLabel || r.enumeratorCode || "Unknown",
+        enumeratorLga: r.enumeratorLga,
+        count: 0,
+        records: [],
+      });
+    }
+    const entry = officers.get(key)!;
+    entry.count++;
+    entry.records.push(r);
+  }
+
+  return Array.from(dateMap.entries())
+    .map(([date, officerMap]) => {
+      const officers = Array.from(officerMap.values()).sort(
+        (a, b) => b.count - a.count
+      );
+      return {
+        date,
+        totalSubmissions: officers.reduce((sum, o) => sum + o.count, 0),
+        officers,
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
