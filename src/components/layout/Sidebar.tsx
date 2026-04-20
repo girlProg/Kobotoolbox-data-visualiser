@@ -7,7 +7,7 @@ import { KoboAsset } from "@/lib/kobo/types";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, FileText, X } from "lucide-react";
+import { LayoutDashboard, FileText, Users, X } from "lucide-react";
 import { useSidebar } from "./SidebarContext";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -72,6 +72,25 @@ export function Sidebar() {
             <LayoutDashboard size={16} />
             Overview
           </Link>
+
+          <div className="pt-2">
+            <p className="px-3 text-xs text-muted-foreground font-medium uppercase tracking-wider pb-1">
+              EMIS Officers
+            </p>
+            <Link
+              href="/dashboard/officers"
+              onClick={close}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                pathname === "/dashboard/officers"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-gray-200 text-gray-700"
+              )}
+            >
+              <Users size={14} className="flex-shrink-0" />
+              Daily activity
+            </Link>
+          </div>
 
           <div className="pt-2">
             <p className="px-3 text-xs text-muted-foreground font-medium uppercase tracking-wider pb-1">
