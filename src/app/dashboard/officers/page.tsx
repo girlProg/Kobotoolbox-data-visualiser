@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { StudentRecord } from "@/lib/kobo/agile";
+import { KoboChoice } from "@/lib/kobo/types";
 import { Topbar } from "@/components/layout/Topbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -19,6 +20,7 @@ export default function OfficersPage() {
   );
 
   const records: StudentRecord[] = data?.records ?? [];
+  const choices: KoboChoice[] = (data?.choices ?? []) as KoboChoice[];
 
   return (
     <>
@@ -54,7 +56,7 @@ export default function OfficersPage() {
             ))}
           </div>
         ) : (
-          <OfficerDailyLog records={records} />
+          <OfficerDailyLog records={records} choices={choices} />
         )}
       </main>
     </>
