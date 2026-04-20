@@ -2,13 +2,20 @@
 
 import { useState } from "react";
 import { dailyOfficerSummary, StudentRecord, OfficerDayEntry } from "@/lib/kobo/agile";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KoboChoice } from "@/lib/kobo/types";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, User, Calendar, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronRight, User, Calendar, Clock, UserX } from "lucide-react";
 
 interface Props {
   records: StudentRecord[];
+  choices: KoboChoice[];
+}
+
+/** Parse "Name | LGA | Phone" → { name, lga } */
+function parseLabel(label: string): { name: string; lga: string } {
+  const parts = label.split("|").map((p) => p.trim());
+  return { name: parts[0] ?? label, lga: parts[1] ?? "" };
 }
 
 function formatDate(iso: string): string {
@@ -121,15 +128,19 @@ function DateGroup({
   date,
   totalSubmissions,
   officers,
+  absentOfficers,
 }: {
   date: string;
   totalSubmissions: number;
   officers: OfficerDayEntry[];
+  absentOfficers: { name: string; lga: string }[];
 }) {
   const [open, setOpen] = useState(true);
+  const [absentOpen, setAbsentOpen] = useState(false);
 
   return (
     <div className="rounded-xl border bg-white overflow-hidden">
+      {/* Date header */}
       <button
         className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
         onClick={() => setOpen((v) => !v)}
@@ -140,44 +151,91 @@ function DateGroup({
           <span className="font-semibold text-sm">{formatDate(date)}</span>
         </span>
         <span className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-xs">{officers.length} officer{officers.length !== 1 ? "s" : ""}</Badge>
+          <Badge variant="secondary" className="text-xs">{officers.length} active</Badge>
+          {absentOfficers.length > 0 && (
+            <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-200">{absentOfficers.length} absent</Badge>
+          )}
           <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">{totalSubmissions} submission{totalSubmissions !== 1 ? "s" : ""}</Badge>
         </span>
       </button>
 
       {open && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/10">
-                <th className="w-5 px-4 py-2" />
-                <th className="text-left px-4 py-2 font-medium text-muted-foreground">Officer</th>
-                <th className="text-left px-4 py-2 font-medium text-muted-foreground">LGA</th>
-                <th className="text-right px-4 py-2 font-medium text-muted-foreground">Submissions</th>
-                <th className="text-left px-4 py-2 font-medium text-muted-foreground">Active period</th>
-              </tr>
-            </thead>
-            <tbody>
-              {officers.map((o) => (
-                <OfficerRow
-                  key={o.enumeratorCode || o.enumeratorLabel}
-                  entry={o}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Active officers table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/10">
+                  <th className="w-5 px-4 py-2" />
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Officer</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">LGA</th>
+                  <th className="text-right px-4 py-2 font-medium text-muted-foreground">Submissions</th>
+                  <th className="text-left px-4 py-2 font-medium text-muted-foreground">Active period</th>
+                </tr>
+              </thead>
+              <tbody>
+                {officers.map((o) => (
+                  <OfficerRow
+                    key={o.enumeratorCode || o.enumeratorLabel}
+                    entry={o}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Absent officers */}
+          {absentOfficers.length > 0 && (
+            <div className="border-t">
+              <button
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-amber-50/60 transition-colors"
+                onClick={() => setAbsentOpen((v) => !v)}
+              >
+                {absentOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                <UserX size={13} className="text-amber-600" />
+                <span className="text-xs font-medium text-amber-700">
+                  {absentOfficers.length} officer{absentOfficers.length !== 1 ? "s" : ""} did not submit
+                </span>
+              </button>
+              {absentOpen && (
+                <div className="px-4 pb-3 flex flex-wrap gap-2">
+                  {absentOfficers.map((o) => (
+                    <span
+                      key={o.name}
+                      className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 bg-amber-50 text-amber-800 border-amber-200"
+                    >
+                      <UserX size={11} />
+                      {o.name}
+                      {o.lga && (
+                        <span className="text-amber-500 font-normal">· {o.lga}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-export function OfficerDailyLog({ records }: Props) {
+export function OfficerDailyLog({ records, choices }: Props) {
   const [lgaFilter, setLgaFilter] = useState("");
   const [search, setSearch] = useState("");
 
+  // Full officer roster from choices, parsed to { code, name, lga }
+  const allOfficers = choices
+    .filter((c) => c.list_name === "enumerator")
+    .map((c) => {
+      const raw = (Array.isArray(c.label) ? c.label[0] : c.label ?? "") as string;
+      const { name, lga } = parseLabel(String(raw));
+      return { code: c.name, name, lga };
+    });
+
   const allLgas = Array.from(
-    new Set(records.map((r) => r.enumeratorLga).filter(Boolean))
+    new Set(allOfficers.map((o) => o.lga).filter(Boolean))
   ).sort();
 
   const filtered = records.filter((r) => {
@@ -192,10 +250,15 @@ export function OfficerDailyLog({ records }: Props) {
     return true;
   });
 
+  // Officer roster scoped to the active LGA filter
+  const scopedRoster = lgaFilter
+    ? allOfficers.filter((o) => o.lga === lgaFilter)
+    : allOfficers;
+
   const summary = dailyOfficerSummary(filtered);
 
   const totalDays = summary.length;
-  const totalOfficers = new Set(records.map((r) => r.enumeratorCode || r.enumeratorLabel)).size;
+  const totalOfficers = allOfficers.length || new Set(records.map((r) => r.enumeratorCode || r.enumeratorLabel)).size;
   const avgPerDay = totalDays > 0 ? Math.round(records.length / totalDays) : 0;
 
   return (
@@ -247,14 +310,19 @@ export function OfficerDailyLog({ records }: Props) {
         </Card>
       ) : (
         <div className="space-y-3">
-          {summary.map(({ date, totalSubmissions, officers }) => (
-            <DateGroup
-              key={date}
-              date={date}
-              totalSubmissions={totalSubmissions}
-              officers={officers}
-            />
-          ))}
+          {summary.map(({ date, totalSubmissions, officers }) => {
+            const activeCodes = new Set(officers.map((o) => o.enumeratorCode).filter(Boolean));
+            const absent = scopedRoster.filter((o) => !activeCodes.has(o.code));
+            return (
+              <DateGroup
+                key={date}
+                date={date}
+                totalSubmissions={totalSubmissions}
+                officers={officers}
+                absentOfficers={absent}
+              />
+            );
+          })}
         </div>
       )}
     </div>
